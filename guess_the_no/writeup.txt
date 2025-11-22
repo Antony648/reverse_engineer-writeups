@@ -1,0 +1,230 @@
+This is the write up of a the challenge of guess the number in ifcr ctf challenge....
+
+
+
+
+on executing the executable we  see are prompted :
+
+Can you guess my secret number?
+Please input your guess.
+
+we are supposed to input an integer( I assume because its a number)
+it perfroms some form of check and gives us win or lose 
+or entering some random values we get
+
+Can you guess my secret number?
+Please input your guess.
+1
+You lose!
+
+Can you guess my secret number?
+Please input your guess.
+45
+You lose!
+
+Can you guess my secret number?
+Please input your guess.
+234235446
+You lose!
+
+
+so on opening the executable in ghidra we see that there is a main function..
+and mulitple other functions... among those we also see an interesting function 
+namely reconstruct_secret();
+
+the main function basically takes our input that is in string and removes
+any '\n' '\r' with '\0'
+and calls a strtoul() and returns it to a variable...
+so it takes our string and converts it to an unsigned integer
+
+then it calls reconstruct_secret(); function
+on inspecting reconstruct_secret()
+
+it performs some form of computation on a fixed value
+0xd9607761
+the function does not take any external parameters.. nor does it take our input
+or any form of time seed...
+
+so i expect it to be same all the time...
+
+the return value is stored to a variable in main
+and it is compared with the integer value of our input
+if match we get "You win!"
+
+
+so we see that start of main is 
+0x001011fa
+and the comparison happens at 
+0x00101365
+
+
+the block of assembly code after call:
+       0010135a e8 2a fe          CALL         reconstruct_secret                                        undefined reconstruct_secret()
+                        ff ff
+        0010135f 89 45 e8        MOV         dword ptr [RBP + local_20],EAX
+       00101362 8b 45 ec         MOV         EAX,dword ptr [RBP + local_1c]
+       00101365 3b 45 e8        CMP          EAX,dword ptr [RBP + local_20]
+it moves to the return value to rbp+local_20 moves our input value( which was at rbp+local_1c) to eax 
+and compares eax with value at rbp+local_20
+
+the assembly instruction 3b 45 38 translates to eax,dword ptr[rbp-0x18]
+
+now with all these info from static analysis we can go dynamic analysis....
+
+we run gdb ./guess
+
+gdb ./guess                    
+GNU gdb (Debian 15.2-1) 15.2
+Copyright (C) 2024 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+GEF for linux ready, type `gef' to start, `gef config' to configure
+93 commands loaded and 5 functions added for GDB 15.2 in 0.00ms using Python engine 3.12
+Reading symbols from ./guess...
+(No debugging symbols found in ./guess)
+gef➤  break main
+Breakpoint 1 at 0x11fe
+gef➤  run
+Starting program: /home/kali/ifcr_writeups/guess_the_no/guess 
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+
+Breakpoint 1, 0x00005555555551fe in main ()
+[ Legend: Modified register | Code | Heap | Stack | String ]
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── registers ────
+$rax   : 0x00005555555551fa  →  <main+0000> push rbp
+$rbx   : 0x00007fffffffde78  →  0x00007fffffffe1e1  →  "/home/kali/ifcr_writeups/guess_the_no/guess"
+$rcx   : 0x0000555555557dd8  →  0x0000555555555140  →  <__do_global_dtors_aux+0000> endbr64 
+$rdx   : 0x00007fffffffde88  →  0x00007fffffffe20d  →  "COLORFGBG=15;0"
+$rsp   : 0x00007fffffffdd60  →  0x0000000000000001
+$rbp   : 0x00007fffffffdd60  →  0x0000000000000001
+$rsi   : 0x00007fffffffde78  →  0x00007fffffffe1e1  →  "/home/kali/ifcr_writeups/guess_the_no/guess"
+$rdi   : 0x1               
+$rip   : 0x00005555555551fe  →  <main+0004> sub rsp, 0x130
+$r8    : 0x0               
+$r9    : 0x00007ffff7fcbf40  →  <_dl_fini+0000> push rbp
+$r10   : 0x00007fffffffdaa0  →  0x0000000000800000
+$r11   : 0x206             
+$r12   : 0x0               
+$r13   : 0x00007fffffffde88  →  0x00007fffffffe20d  →  "COLORFGBG=15;0"
+$r14   : 0x00007ffff7ffd000  →  0x00007ffff7ffe2e0  →  0x0000555555554000  →   jg 0x555555554047
+$r15   : 0x0000555555557dd8  →  0x0000555555555140  →  <__do_global_dtors_aux+0000> endbr64 
+$eflags: [ZERO carry PARITY adjust sign trap INTERRUPT direction overflow resume virtualx86 identification]
+$cs: 0x33 $ss: 0x2b $ds: 0x00 $es: 0x00 $fs: 0x00 $gs: 0x00 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── stack ────
+0x00007fffffffdd60│+0x0000: 0x0000000000000001   ← $rsp, $rbp
+0x00007fffffffdd68│+0x0008: 0x00007ffff7ddcd68  →  <__libc_start_call_main+0078> mov edi, eax
+0x00007fffffffdd70│+0x0010: 0x00007fffffffde60  →  0x00007fffffffde68  →  0x0000000000000038 ("8"?)
+0x00007fffffffdd78│+0x0018: 0x00005555555551fa  →  <main+0000> push rbp
+0x00007fffffffdd80│+0x0020: 0x0000000155554040
+0x00007fffffffdd88│+0x0028: 0x00007fffffffde78  →  0x00007fffffffe1e1  →  "/home/kali/ifcr_writeups/guess_the_no/guess"
+0x00007fffffffdd90│+0x0030: 0x00007fffffffde78  →  0x00007fffffffe1e1  →  "/home/kali/ifcr_writeups/guess_the_no/guess"
+0x00007fffffffdd98│+0x0038: 0x2b6bfdf1a50fbefd
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── code:x86:64 ────
+   0x5555555551f9 <reconstruct_secret+0070> ret    
+   0x5555555551fa <main+0000>      push   rbp
+   0x5555555551fb <main+0001>      mov    rbp, rsp
+●→ 0x5555555551fe <main+0004>      sub    rsp, 0x130
+   0x555555555205 <main+000b>      lea    rax, [rip+0xdfc]        # 0x555555556008
+   0x55555555520c <main+0012>      mov    rdi, rax
+   0x55555555520f <main+0015>      call   0x555555555030 <puts@plt>
+   0x555555555214 <main+001a>      lea    rax, [rip+0xe0d]        # 0x555555556028
+   0x55555555521b <main+0021>      mov    rdi, rax
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── threads ────
+[#0] Id 1, Name: "guess", stopped 0x5555555551fe in main (), reason: BREAKPOINT
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── trace ────
+[#0] 0x5555555551fe → main()
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+gef➤  
+
+
+we see main is at 0x5555555551fe 
+if 
+0x001011fa is 0x5555555551fe 
+then 0x00101365 is 0x555555555365 
+
+so we add
+gef➤  break* 0x555555555365
+Breakpoint 2 at 0x555555555365
+gef➤  c
+Continuing.
+Can you guess my secret number?
+Please input your guess.
+12345
+
+Breakpoint 2, 0x0000555555555365 in main ()
+[ Legend: Modified register | Code | Heap | Stack | String ]
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── registers ────
+$rax   : 0x3039            
+$rbx   : 0x00007fffffffde78  →  0x00007fffffffe1e1  →  "/home/kali/ifcr_writeups/guess_the_no/guess"
+$rcx   : 0x00007fffffffdc45  →  0x0000000002000000
+$rdx   : 0x2a345d          
+$rsp   : 0x00007fffffffdc30  →  0x0000000000000000
+$rbp   : 0x00007fffffffdd60  →  0x0000000000000001
+$rsi   : 0x3039            
+$rdi   : 0xa               
+$rip   : 0x0000555555555365  →  <main+016b> cmp eax, DWORD PTR [rbp-0x18]
+$r8    : 0x1999999999999999
+$r9    : 0x0               
+$r10   : 0x00007ffff7f41fe0  →  0x0000000100000000
+$r11   : 0x00007ffff7f428e0  →  0x0002000200020002
+$r12   : 0x0               
+$r13   : 0x00007fffffffde88  →  0x00007fffffffe20d  →  "COLORFGBG=15;0"
+$r14   : 0x00007ffff7ffd000  →  0x00007ffff7ffe2e0  →  0x0000555555554000  →   jg 0x555555554047
+$r15   : 0x0000555555557dd8  →  0x0000555555555140  →  <__do_global_dtors_aux+0000> endbr64 
+$eflags: [zero carry parity adjust SIGN trap INTERRUPT direction overflow resume virtualx86 identification]
+$cs: 0x33 $ss: 0x2b $ds: 0x00 $es: 0x00 $fs: 0x00 $gs: 0x00 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── stack ────
+0x00007fffffffdc30│+0x0000: 0x0000000000000000   ← $rsp
+0x00007fffffffdc38│+0x0008: 0x00007fffffffdc45  →  0x0000000002000000
+0x00007fffffffdc40│+0x0010: 0x0000003534333231 ("12345"?)
+0x00007fffffffdc48│+0x0018: 0x0000000000000002
+0x00007fffffffdc50│+0x0020: 0x0000000000c00000
+0x00007fffffffdc58│+0x0028: 0x00000000000102f9
+0x00007fffffffdc60│+0x0030: 0x0000000000000001
+0x00007fffffffdc68│+0x0038: 0x00007fffffffdd30  →  0x0000000000000000
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── code:x86:64 ────
+   0x55555555535a <main+0160>      call   0x555555555189 <reconstruct_secret>
+   0x55555555535f <main+0165>      mov    DWORD PTR [rbp-0x18], eax
+   0x555555555362 <main+0168>      mov    eax, DWORD PTR [rbp-0x14]
+●→ 0x555555555365 <main+016b>      cmp    eax, DWORD PTR [rbp-0x18]
+   0x555555555368 <main+016e>      jne    0x55555555537b <main+385>
+   0x55555555536a <main+0170>      lea    rax, [rip+0xcd0]        # 0x555555556041
+   0x555555555371 <main+0177>      mov    rdi, rax
+   0x555555555374 <main+017a>      call   0x555555555030 <puts@plt>
+   0x555555555379 <main+017f>      jmp    0x55555555538a <main+400>
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── threads ────
+[#0] Id 1, Name: "guess", stopped 0x555555555365 in main (), reason: BREAKPOINT
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── trace ────
+[#0] 0x555555555365 → main()
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+now we see our value is at rbp-0x18
+we can get it by
+
+gef➤  x/w $rbp-0x18
+0x7fffffffdd48: 0x882a345d
+
+this should be our value...
+$ python3 -c print(int(0x882a345d))
+2284467293
+
+Can you guess my secret number?
+Please input your guess.
+2284467293
+You win!
+
+
+	

@@ -1,0 +1,287 @@
+this is a writeup for spinlock challenge in ifcr ctf competition
+
+./spinlock 
+
+  ███████╗██████╗ ██╗███╗   ██╗    ██╗      ██████╗  ██████╗██╗  ██╗
+  ██╔════╝██╔══██╗██║████╗  ██║    ██║     ██╔═══██╗██╔════╝██║ ██╔╝
+  ███████╗██████╔╝██║██╔██╗ ██║    ██║     ██║   ██║██║     █████╔╝ 
+  ╚════██║██╔═══╝ ██║██║╚██╗██║    ██║     ██║   ██║██║     ██╔═██╗ 
+  ███████║██║     ██║██║ ╚████║    ███████╗╚██████╔╝╚██████╗██║  ██╗
+  ╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝    ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║   Quantum Security System v2.1                           ║
+  ║   Electron Spin Authentication Required                 ║
+  ╚══════════════════════════════════════════════════════════╝
+
+┌────────────────────────────────────────────────────────────┐
+│ INSTRUCTIONS                                               │
+├────────────────────────────────────────────────────────────┤
+│ Configure 4 electron spins to unlock the quantum vault   │
+│                                                            │
+│ For each electron, specify the spin state:                │
+│   •  1 = Spin UP   (↑)                                    │
+│   • -1 = Spin DOWN (↓)                                    │
+│                                                            │
+│ Only the correct quantum configuration unlocks the vault! │
+└────────────────────────────────────────────────────────────┘
+
+Enter electron spin configuration:
+
+  Electron 0 [Spin: 1 or -1]: 
+  
+
+on running the command we get this,so we see that we have only 2 inputs 1 an -1 
+1 for spin up and -1 for spin down , it wants us to configure the spinlock so as to unlock the vault 
+the idea here is to enter 1 and -1 in a sequence so as to unlock the vault and get the flag
+
+
+on entering random values we get
+
+Enter electron spin configuration:
+
+  Electron 0 [Spin: 1 or -1]: 1
+  Electron 1 [Spin: 1 or -1]: 1
+  Electron 2 [Spin: 1 or -1]: 1
+  Electron 3 [Spin: 1 or -1]: 1
+
+[*] Analyzing quantum state...
+[*] Computing spin operators...
+[*] Verifying conservation laws...
+
+╔════════════════════════════════════════════════════════════╗
+║               ✗ INVALID QUANTUM STATE ✗                   ║
+╚════════════════════════════════════════════════════════════╝
+
+[!] The spin configuration does not satisfy quantum constraints.
+[!] Access denied.
+
+so there are 2^4 possible combinations and only one of them is valid
+on entering the correct combination  we unlock the vautl
+
+on opening the program in ghidra we see that we have a couple of functions and along with them we have main
+and code corresponding to main is
+
+undefined8 main(void)
+
+{
+  int iVar1;
+  int local_28 [7];
+  uint local_c;
+  
+  print_banner();
+  print_help();
+  puts("Enter electron spin configuration:\n");
+  local_c = 0;
+  while( true ) {
+    if (3 < (int)local_c) {
+      puts("\n[*] Analyzing quantum state...");
+      puts("[*] Computing spin operators...");
+      puts("[*] Verifying conservation laws...");
+      iVar1 = verify_spin_state(local_28);
+      if (iVar1 == 0) {
+        puts(&DAT_00102008);
+        puts(&DAT_00102e58);
+        puts(&DAT_00102ea0);
+        puts("\n[!] The spin configuration does not satisfy qua ntum constraints.");
+        puts("[!] Access denied.");
+      }
+      else {
+        decrypt_flag(local_28);
+      }
+      return 0;
+
+this appers to be a relatively simple function
+it calls print_banner() and print_help(), which prints all the details we see....
+
+we also see 
+
+  puts("Enter electron spin configuration:\n");
+this is also part of our output now we see that there is function call to "verify_spin_state()"
+the return value of that function used to jump to sucess/failure block
+if it returns 0 we lose else we win 
+so we inspect verify_spin_state()
+
+undefined8 verify_spin_state(undefined8 param_1)
+
+{
+  int iVar1;
+  undefined8 uVar2;
+  
+  iVar1 = calculate_total_spin(param_1);
+  if (iVar1 == 0) {
+    iVar1 = calculate_coupling(param_1);
+    if (iVar1 == -1) {
+      iVar1 = check_spin_pattern(param_1);
+      if (iVar1 == 0) {
+        uVar2 = 0;
+      }
+      else {
+        iVar1 = check_parity(param_1);
+        if (iVar1 == 0) {
+          uVar2 = 0;
+        }
+        else {
+          uVar2 = 1;
+        }
+      }
+    }
+    else {
+      uVar2 = 0;
+    }
+  }
+  else {
+    uVar2 = 0;
+  }
+  return uVar2;
+}
+
+in this code w see that the uVar2 is the return value and we have to set it anything but 0
+we have 4 function calls here
+
+calculate_total_spin()
+calculate_coupling()
+check_spin_patter()
+check_parity()
+
+so to set uVar2 to 1 we need the following
+calculate_total_spin() returns 0
+calculate_coupling()	returns -1
+check_spin_patter()	returns anything but 0
+check_parity()		returns anything but 0
+
+so on inspecting calcuate_total_spin()
+we see after some basic renaming :
+
+
+int calculate_total_spin(long param_1)
+
+{
+  int i;
+  int sum;
+  
+  sum = 0;
+  for (i = 0; i < 4; i = i + 1) {
+    sum = sum + *(int *)(param_1 + (long)i * 4);
+  }
+  return sum;
+}
+
+
+it just returns sum of all the values
+so our sequence contains equal number of -1 and 1
+
+
+on inspecting calculate_coupling()
+we see after some basic reaming:
+
+
+int calculate_coupling(int *param_1)
+
+{
+  int i;
+  int local_c;
+  
+  local_c = 0;
+  for (i = 0; i < 3; i = i + 1) {
+    local_c = local_c + param_1[(long)i + 1] * param_1[i];
+  }
+  return local_c;
+}
+
+the arrangement of 1s and -1s should be in such a fashion that
+if we take two adjacent values and muliply and take their summation we 
+get -1
+
+in other words (val_1* val_2)+(val_2* val_3)+(val_3 * val_4) =-1
+
+
+on inspecting check_spin_pattern()
+we see after some basic renaming:
+
+
+bool check_spin_pattern(int *param_1)
+
+{
+  int i;
+  uint local_c;
+  
+  local_c = 0;
+  for (i = 0; i < 4; i = i + 1) {
+    if (param_1[i] == 1) {
+      local_c = local_c | 1 << ((byte)i & 0x1f);
+    }
+  }
+  return local_c == 6;
+}
+
+so here we have unsinged integer local_c;
+the loop iterates through all elements  if the value at a particular location is  1, then it will just set corresponding bit 
+in the binary representation as 1
+
+this works because initial value of local_c is 0 and all 1s in local_c is from the or operation
+ and for the 
+1 << ((byte)i & 0x1f);
+ part it just means
+1<< i;
+because i value never exceeds 4 and we are perfoming and with 1 for all bits so value of i is preserved 
+so 
+if the input sequence is -1-1 1 1(equal number of 1s and -1s are mandatory to reach here)
+then the value in local_c is 0011
+
+now the value is compared with 0110(6)
+so we know the middle two values are 11 and the number or 1s and -1 s should be equal
+so the sequence is likely to be -1 1 1 -1
+
+./spinlock                     
+
+  ███████╗██████╗ ██╗███╗   ██╗    ██╗      ██████╗  ██████╗██╗  ██╗
+  ██╔════╝██╔══██╗██║████╗  ██║    ██║     ██╔═══██╗██╔════╝██║ ██╔╝
+  ███████╗██████╔╝██║██╔██╗ ██║    ██║     ██║   ██║██║     █████╔╝ 
+  ╚════██║██╔═══╝ ██║██║╚██╗██║    ██║     ██║   ██║██║     ██╔═██╗ 
+  ███████║██║     ██║██║ ╚████║    ███████╗╚██████╔╝╚██████╗██║  ██╗
+  ╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝    ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║   Quantum Security System v2.1                           ║
+  ║   Electron Spin Authentication Required                 ║
+  ╚══════════════════════════════════════════════════════════╝
+
+┌────────────────────────────────────────────────────────────┐
+│ INSTRUCTIONS                                               │
+├────────────────────────────────────────────────────────────┤
+│ Configure 4 electron spins to unlock the quantum vault   │
+│                                                            │
+│ For each electron, specify the spin state:                │
+│   •  1 = Spin UP   (↑)                                    │
+│   • -1 = Spin DOWN (↓)                                    │
+│                                                            │
+│ Only the correct quantum configuration unlocks the vault! │
+└────────────────────────────────────────────────────────────┘
+
+Enter electron spin configuration:
+
+  Electron 0 [Spin: 1 or -1]: -1
+  Electron 1 [Spin: 1 or -1]: 1
+  Electron 2 [Spin: 1 or -1]: 1
+  Electron 3 [Spin: 1 or -1]: -1
+
+[*] Analyzing quantum state...
+[*] Computing spin operators...
+[*] Verifying conservation laws...
+
+╔════════════════════════════════════════════════════════════╗
+║          ✓ QUANTUM STATE VERIFIED ✓                       ║
+╚════════════════════════════════════════════════════════════╝
+
+[*] Decrypting vault contents...
+
+    isfcr{Sp1n_M4st3r_Qu4ntum_H4ck3r}
+
+╔════════════════════════════════════════════════════════════╗
+║             ACCESS GRANTED - VAULT UNLOCKED                ║
+╚════════════════════════════════════════════════════════════╝
+
+
+
+on entering the sequence we get the flag!
